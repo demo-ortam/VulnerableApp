@@ -181,7 +181,7 @@ jobs:
           path: semgrep-results.sarif
 
 # ==================================================
-# 5️⃣ Secret Scan – TruffleHog (Docker + Artifact, fixed)
+# 5️⃣ Secret Scan – TruffleHog
 # ==================================================
   trufflehog-secret-scan:
     runs-on: ubuntu-latest
@@ -197,7 +197,7 @@ jobs:
       - name: Run TruffleHog Secret Scan (Docker)
         continue-on-error: true
         run: |
-          docker run --rm -v "$PWD:/repo" ghcr.io/trufflesecurity/trufflehog:latest \
+          docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:latest \
             filesystem /repo -j --results=verified,unknown --no-color > trufflehog-results.json 2>&1 || true
 
       - name: Verify TruffleHog output

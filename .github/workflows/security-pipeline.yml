@@ -34,9 +34,7 @@ jobs:
           ./gradlew build | tee build.log
 
       - name: Build Docker image with Jib
-        run: |
-          ./gradlew jibDockerBuild
-          docker tag sasanlabs/owasp-vulnerableapp:unreleased owasp-vulnerableapp:latest
+        run: ./gradlew jibDockerBuild
         env:
           JIB_JAVA_COMMAND: '["-Dspring.profiles.active=prod"]'
 
@@ -50,7 +48,7 @@ jobs:
           path: build.log
 
 # ==================================================
-# 2️⃣ Dependency Check – SCA (HTML + SARIF)
+# 2️⃣ Dependency Check – SCA (HTML only)
 # ==================================================
   dependency-check:
     runs-on: ubuntu-latest
@@ -67,7 +65,7 @@ jobs:
         with:
           project: VulnerableApp
           path: .
-          format: SARIF,HTML
+          format: HTML
 
       - name: Verify Dependency-Check output
         run: |
@@ -79,13 +77,6 @@ jobs:
         with:
           name: dependency-check-html-report
           path: reports/dependency-check-report.html
-
-      - name: Upload Dependency-Check SARIF report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-check-sarif-report
-          path: reports/dependency-check-report.sarif
 
 # ==================================================
 # 3️⃣ Trivy – Image Vulnerability + Secret Scan
@@ -105,7 +96,7 @@ jobs:
         continue-on-error: true
         uses: aquasecurity/trivy-action@0.33.1
         with:
-          image-ref: owasp-vulnerableapp:latest
+          image-ref: sasanlabs/owasp-vulnerableapp:unreleased
           scanners: vuln,secret
           severity: CRITICAL,HIGH,MEDIUM,LOW
           format: sarif
@@ -129,7 +120,7 @@ jobs:
         continue-on-error: true
         uses: aquasecurity/trivy-action@0.33.1
         with:
-          image-ref: owasp-vulnerableapp:latest
+          image-ref: sasanlabs/owasp-vulnerableapp:unreleased
           scanners: vuln,secret
           format: json
           output: trivy-results.json
@@ -206,8 +197,8 @@ jobs:
       - name: Run TruffleHog Secret Scan (Docker)
         continue-on-error: true
         run: |
-          docker run --rm -v "$PWD:/repo" ghcr.io/trufflesecurity/trufflehog:latest \
-            filesystem /repo --json > trufflehog-results.json 2>&1 || true
+          docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:latest \
+            filesystem /repo --json > trufflehog-results.json || true
 
       - name: Verify TruffleHog output
         run: |

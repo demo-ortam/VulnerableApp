@@ -44,15 +44,42 @@ jobs:
         env:
           JIB_JAVA_COMMAND: '["-Dspring.profiles.active=prod"]'
 
-      - name: Scan Docker image with Trivy
+      # 🔍 Verify image exists (debug & safety)
+      - name: Verify Docker image
+        run: docker images | grep owasp-vulnerableapp
+
+      # 📦 Trivy image scan (table + txt)
+      - name: Scan Docker image with Trivy (TXT)
         continue-on-error: true
         uses: aquasecurity/trivy-action@0.33.1
         with:
-          image-ref: 'vulnerable-app:latest'
+          image-ref: 'sasanlabs/owasp-vulnerableapp:unreleased'   # ✅ FIX
           format: 'table'
           severity: 'CRITICAL,HIGH,MEDIUM,LOW'
           output: 'trivy-results.txt'
           exit-code: '0'
+
+      # 📤 Upload Trivy TXT report
+      - name: Upload Trivy TXT report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results
+          path: trivy-results.txt
+
+      # 🛡️ Trivy SARIF → GitHub Security tab
+      - name: Scan Docker image with Trivy (SARIF)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: 'sasanlabs/owasp-vulnerableapp:unreleased'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+          exit-code: '0'
+
+      - name: Upload Trivy SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: trivy-results.sarif
 
   # SAST with Semgrep (runs in parallel with build)
   semgrep-analysis:

@@ -7,9 +7,14 @@ on:
     branches: [ master ]
   workflow_dispatch:
 
+# ---------------------------
+# 1️⃣ Build job
+# ---------------------------
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v2
@@ -25,64 +30,100 @@ jobs:
       - name: Build with Gradle
         run: ./gradlew build
 
-      - name: Run OWASP Dependency-Check (SCA)
-        continue-on-error: true
-        uses: dependency-check/Dependency-Check_Action@main
-        with:
-          project: 'VulnerableApp'
-          path: '.'
-          format: 'HTML'
-
-      - name: Upload Dependency-Check report
-        uses: actions/upload-artifact@v4
-        with:
-          name: dependency-check-report
-          path: dependency-check-report.html
-
       - name: Build Docker image with Jib
         run: ./gradlew jibDockerBuild --info
         env:
           JIB_JAVA_COMMAND: '["-Dspring.profiles.active=prod"]'
 
-      # 🔍 Verify image exists (debug & safety)
       - name: Verify Docker image
         run: docker images | grep owasp-vulnerableapp
 
-      # 📦 Trivy image scan (table + txt)
-      - name: Scan Docker image with Trivy (TXT)
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@0.33.1
-        with:
-          image-ref: 'sasanlabs/owasp-vulnerableapp:unreleased'   # ✅ FIX
-          format: 'table'
-          severity: 'CRITICAL,HIGH,MEDIUM,LOW'
-          output: 'trivy-results.txt'
-          exit-code: '0'
+# ---------------------------
+# 2️⃣ SBOM generation
+# ---------------------------
+  sbom:
+    runs-on: ubuntu-latest
+    needs: build
+    permissions:
+      contents: read
 
-      # 📤 Upload Trivy TXT report
-      - name: Upload Trivy TXT report
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Generate SBOM with Syft
+        uses: anchore/syft-action@v0
+        with:
+          image: sasanlabs/owasp-vulnerableapp:unreleased
+          format: cyclonedx-json
+          output: sbom.json
+
+      - name: Upload SBOM artifact
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-results
-          path: trivy-results.txt
+          name: sbom
+          path: sbom.json
 
-      # 🛡️ Trivy SARIF → GitHub Security tab
-      - name: Scan Docker image with Trivy (SARIF)
-        continue-on-error: true
-        uses: aquasecurity/trivy-action@0.33.1
+# ---------------------------
+# 3️⃣ SCA (dependency scan)
+# ---------------------------
+  sca:
+    runs-on: ubuntu-latest
+    needs: sbom
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Download SBOM
+        uses: actions/download-artifact@v4
         with:
-          image-ref: 'sasanlabs/owasp-vulnerableapp:unreleased'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          name: sbom
+
+      - name: Scan SBOM with Grype
+        uses: anchore/grype-action@v0
+        continue-on-error: true
+        with:
+          sbom: sbom.json
+          output-format: table
+
+# ---------------------------
+# 4️⃣ Image + Secret scan
+# ---------------------------
+  image-scan:
+    runs-on: ubuntu-latest
+    needs: sca
+    permissions:
+      contents: read
+      security-events: write
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Scan Docker image with Trivy (SARIF)
+        uses: aquasecurity/trivy-action@0.33.1
+        continue-on-error: true
+        with:
+          image-ref: sasanlabs/owasp-vulnerableapp:unreleased
+          format: sarif
+          output: trivy-results.sarif
           exit-code: '0'
 
       - name: Upload Trivy SARIF to GitHub Security
-        uses: github/codeql-action/upload-sarif@v2
+        uses: github/codeql-action/upload-sarif@v3
         with:
           sarif_file: trivy-results.sarif
 
-  # SAST with Semgrep (runs in parallel with build)
-  semgrep-analysis:
+      - name: Upload Trivy SARIF artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-results
+          path: trivy-results.sarif
+
+# ---------------------------
+# 5️⃣ SAST (parallel by design)
+# ---------------------------
+  sast:
     name: Semgrep SAST Analysis
     runs-on: ubuntu-latest
     permissions:
@@ -90,8 +131,7 @@ jobs:
       security-events: write
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
+      - uses: actions/checkout@v2
 
       - name: Run Semgrep
         uses: semgrep/semgrep-action@v1

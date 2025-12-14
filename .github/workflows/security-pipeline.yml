@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-and-scan:
+  build:
     runs-on: ubuntu-latest
     
     steps:
@@ -24,8 +24,13 @@ jobs:
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
     
+    - name: Apply code formatting
+      run: |
+        ./gradlew spotlessApply
+        git diff --quiet || (echo 'Code formatting issues found. Run ./gradlew spotlessApply locally and commit the changes.' && exit 1)
+    
     - name: Build with Gradle
-      run: ./gradlew build
+      run: ./gradlew build -x spotlessJavaCheck -x spotlessJava
     
     - name: Build Docker image with Jib
       run: ./gradlew jibDockerBuild --info

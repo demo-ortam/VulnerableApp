@@ -55,9 +55,8 @@ jobs:
         with:
           image: sasanlabs/owasp-vulnerableapp:unreleased
           format: cyclonedx-json
-          output-file: sbom.json
-          artifact-name: owasp-vulnerableapp-sbom
-
+          output-file: cyclonedxsbom.json
+          
 # ==================================================
 # 3️⃣ Dependency Check – SCA
 # ==================================================

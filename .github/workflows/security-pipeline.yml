@@ -203,7 +203,9 @@ jobs:
           extra_args: >
             --results=verified,unknown
             --json
-            --output=trufflehog-results.json
+            
+      - name: Save TruffleHog JSON output
+        run: mv trufflehog.json trufflehog-results.json || true
 
       - name: Upload TruffleHog report
         if: always()

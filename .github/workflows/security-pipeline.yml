@@ -48,7 +48,7 @@ jobs:
           path: build.log
 
 # ==================================================
-# 2️⃣ Dependency Check – SCA (HTML only)
+# 2️⃣ Dependency Check – SCA (HTML only) ✅ FIXED
 # ==================================================
   dependency-check:
     runs-on: ubuntu-latest
@@ -67,17 +67,18 @@ jobs:
           project: VulnerableApp
           path: .
           format: HTML
-          out: dependency-check-report
 
       - name: Verify Dependency-Check output
-        run: ls -la dependency-check-report || echo "No report directory found"
+        run: |
+          ls -la reports || echo "No reports directory found"
 
       - name: Upload Dependency-Check HTML report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dependency-check-html-report
-          path: dependency-check-report/dependency-check-report.html
+          path: reports/dependency-check-report.html
+
 
 # ==================================================
 # 3️⃣ Trivy – Image Vulnerability + Secret Scan

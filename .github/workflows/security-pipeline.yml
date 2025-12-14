@@ -48,7 +48,7 @@ jobs:
           path: build.log
 
 # ==================================================
-# 2️⃣ Dependency Check – SCA (HTML only) ✅ FIXED
+# 2️⃣ Dependency Check – SCA (HTML only)
 # ==================================================
   dependency-check:
     runs-on: ubuntu-latest
@@ -77,7 +77,6 @@ jobs:
         with:
           name: dependency-check-html-report
           path: reports/dependency-check-report.html
-
 
 # ==================================================
 # 3️⃣ Trivy – Image Vulnerability + Secret Scan
@@ -182,7 +181,7 @@ jobs:
           path: semgrep-results.sarif
 
 # ==================================================
-# 5️⃣ Secret Scan – TruffleHog
+# 5️⃣ Secret Scan – TruffleHog (Standard GH Action)
 # ==================================================
   trufflehog-secret-scan:
     runs-on: ubuntu-latest
@@ -192,12 +191,19 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Run TruffleHog
+      - name: Run TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@main
         continue-on-error: true
-        run: |
-          docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:latest \
-            filesystem /repo --json > trufflehog-results.json || true
+        with:
+          base: ""
+          head: ${{ github.ref_name }}
+          extra_args: >
+            --results=verified,unknown
+            --json
+            --output=trufflehog-results.json
 
       - name: Upload TruffleHog report
         if: always()
@@ -205,4 +211,3 @@ jobs:
         with:
           name: trufflehog-report
           path: trufflehog-results.json
-

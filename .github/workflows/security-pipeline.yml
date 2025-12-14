@@ -69,10 +69,6 @@ jobs:
         uses: anchore/sbom-action@v0.15.11
         with:
           image: sasanlabs/owasp-vulnerableapp:unreleased
-          format: cyclonedx-json
-          output-file: cyclonedxsbom.json
-          artifact-name: sbom
-          upload-artifact: true
 
 # ==================================================
 # 3️⃣ Dependency Check – SCA

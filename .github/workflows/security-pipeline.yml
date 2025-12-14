@@ -16,13 +16,22 @@ jobs:
     permissions:
       contents: read
 
-    steps:
-      - uses: actions/checkout@v2
+    outputs:
+      pipeline_start: ${{ steps.start_time.outputs.start }}
 
-      - name: Set up JDK 1.8
-        uses: actions/setup-java@v1
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set pipeline start time
+        id: start_time
+        run: echo "start=$(date +%s)" >> $GITHUB_OUTPUT
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
         with:
-          java-version: 1.8
+          distribution: temurin
+          java-version: '8'
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -31,7 +40,7 @@ jobs:
         run: ./gradlew build
 
       - name: Build Docker image with Jib
-        run: ./gradlew jibDockerBuild --info
+        run: ./gradlew jibDockerBuild
         env:
           JIB_JAVA_COMMAND: '["-Dspring.profiles.active=prod"]'
 
@@ -39,7 +48,7 @@ jobs:
         run: docker images | grep owasp-vulnerableapp
 
 # ==================================================
-# 2️⃣ SBOM Generation
+# 2️⃣ SBOM Generation (Syft)
 # ==================================================
   sbom:
     runs-on: ubuntu-latest
@@ -47,16 +56,24 @@ jobs:
     permissions:
       contents: read
 
-    steps:
-      - uses: actions/checkout@v2
+    outputs:
+      sbom_duration: ${{ steps.timer.outputs.duration }}
 
-      - name: Generate SBOM (Syft)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate SBOM
+        id: timer
+        continue-on-error: true
         uses: anchore/sbom-action@v0.15.11
         with:
           image: sasanlabs/owasp-vulnerableapp:unreleased
           format: cyclonedx-json
           output-file: cyclonedxsbom.json
-          
+          artifact-name: sbom
+          upload-artifact: true
+
 # ==================================================
 # 3️⃣ Dependency Check – SCA
 # ==================================================
@@ -67,24 +84,33 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start timer
+        run: echo "DC_START=$(date +%s)" >> $GITHUB_ENV
 
       - name: Dependency Check (SCA)
-        uses: dependency-check/Dependency-Check_Action@1.1.0
         continue-on-error: true
+        uses: dependency-check/Dependency-Check_Action@1.1.0
         with:
           project: VulnerableApp
           path: .
           format: HTML
 
+      - name: Stop timer
+        run: |
+          DC_END=$(date +%s)
+          echo "DEPENDENCY_CHECK_DURATION=$((DC_END - DC_START))" >> $GITHUB_ENV
+
       - name: Upload Dependency-Check report
         uses: actions/upload-artifact@v4
         with:
-          name: dependency-check-report
+          name: dependency_check_report
           path: reports/dependency-check-report.html
 
 # ==================================================
-# 4️⃣ Trivy – Image Vulnerability + SCA
+# 4️⃣ Trivy – Image Vulnerability + Secret Scan
 # ==================================================
   trivy-scan:
     runs-on: ubuntu-latest
@@ -94,18 +120,27 @@ jobs:
       security-events: write
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start timer
+        run: echo "TRIVY_START=$(date +%s)" >> $GITHUB_ENV
 
       - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.33.1
         continue-on-error: true
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           image-ref: sasanlabs/owasp-vulnerableapp:unreleased
-          format: sarif
-          output: trivy-results.sarif
           scanners: vuln,secret
           severity: CRITICAL,HIGH,MEDIUM,LOW
+          format: sarif
+          output: trivy-results.sarif
           exit-code: '0'
+
+      - name: Stop timer
+        run: |
+          TRIVY_END=$(date +%s)
+          echo "TRIVY_DURATION=$((TRIVY_END - TRIVY_START))" >> $GITHUB_ENV
 
       - name: Upload Trivy SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
@@ -122,16 +157,25 @@ jobs:
       security-events: write
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start timer
+        run: echo "SEMGREP_START=$(date +%s)" >> $GITHUB_ENV
 
       - name: Run Semgrep
-        uses: semgrep/semgrep-action@v1
         continue-on-error: true
+        uses: semgrep/semgrep-action@v1
         with:
           config: >-
             p/java
             p/security-audit
             p/owasp-top-ten
+
+      - name: Stop timer
+        run: |
+          SEMGREP_END=$(date +%s)
+          echo "SEMGREP_DURATION=$((SEMGREP_END - SEMGREP_START))" >> $GITHUB_ENV
 
 # ==================================================
 # 6️⃣ Secret Scan – TruffleHog (Parallel)
@@ -142,10 +186,45 @@ jobs:
       contents: read
 
     steps:
-      - uses: actions/checkout@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start timer
+        run: echo "TH_START=$(date +%s)" >> $GITHUB_ENV
 
       - name: TruffleHog OSS
-        uses: trufflesecurity/trufflehog@v3.92.3
         continue-on-error: true
+        uses: trufflesecurity/trufflehog@v3.92.3
         with:
           path: ./
+
+      - name: Stop timer
+        run: |
+          TH_END=$(date +%s)
+          echo "TRUFFLEHOG_DURATION=$((TH_END - TH_START))" >> $GITHUB_ENV
+
+# ==================================================
+# 7️⃣ Metrics Summary
+# ==================================================
+  metrics-summary:
+    runs-on: ubuntu-latest
+    needs:
+      - build
+      - sbom
+      - dependency-check
+      - trivy-scan
+      - sast
+      - secret-scan
+
+    steps:
+      - name: Print pipeline metrics
+        run: |
+          END_TIME=$(date +%s)
+          TOTAL_DURATION=$((END_TIME - ${{ needs.build.outputs.pipeline_start }}))
+
+          echo "========== PIPELINE METRICS =========="
+          echo "Dependency-Check Duration: ${DEPENDENCY_CHECK_DURATION:-0}s"
+          echo "Trivy Duration: ${TRIVY_DURATION:-0}s"
+          echo "Semgrep Duration: ${SEMGREP_DURATION:-0}s"
+          echo "TruffleHog Duration: ${TRUFFLEHOG_DURATION:-0}s"
+          echo "TOTAL PIPELINE DURATION: ${TOTAL_DURATION}s"

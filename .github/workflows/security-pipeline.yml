@@ -181,7 +181,7 @@ jobs:
           path: semgrep-results.sarif
 
 # ==================================================
-# 5️⃣ Secret Scan – TruffleHog (Standard GH Action)
+# 5️⃣ Secret Scan – TruffleHog (Docker + Artifact)
 # ==================================================
   trufflehog-secret-scan:
     runs-on: ubuntu-latest
@@ -189,23 +189,25 @@ jobs:
       contents: read
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Run TruffleHog Secret Scan
-        uses: trufflesecurity/trufflehog@main
+      - name: Run TruffleHog Secret Scan (Docker)
         continue-on-error: true
-        with:
-          base: ""
-          head: ${{ github.ref_name }}
-          extra_args: >
-            --results=verified,unknown
-            --json
-            
-      - name: Save TruffleHog JSON output
-        run: mv trufflehog.json trufflehog-results.json || true
+        run: |
+          docker run --rm -v "$PWD:/repo" ghcr.io/trufflesecurity/trufflehog:latest \
+            filesystem /repo -j --results=verified,unknown > trufflehog-results.json || true
+
+      - name: Verify TruffleHog output
+        run: |
+          if [ -f "trufflehog-results.json" ]; then
+            echo "TruffleHog JSON generated successfully."
+            ls -lh trufflehog-results.json
+          else
+            echo "No TruffleHog JSON output found."
+          fi
 
       - name: Upload TruffleHog report
         if: always()

@@ -106,6 +106,23 @@ jobs:
           output: trivy-results.sarif
           exit-code: '0'
 
+      - name: Check if Trivy SARIF has results
+        id: check-trivy
+        run: |
+          if [ -f "trivy-results.sarif" ]; then
+            # Check if file has valid SARIF content with at least one result
+            if jq -e '.runs[0].results | length > 0' trivy-results.sarif > /dev/null 2>&1; then
+              echo "has_results=true" >> $GITHUB_OUTPUT
+              echo "Trivy SARIF file contains results"
+            else
+              echo "has_results=false" >> $GITHUB_OUTPUT
+              echo "Trivy SARIF file exists but has no results"
+            fi
+          else
+            echo "has_results=false" >> $GITHUB_OUTPUT
+            echo "Trivy SARIF file not found"
+          fi
+
       - name: Trivy image scan (JSON)
         continue-on-error: true
         uses: aquasecurity/trivy-action@0.33.1
@@ -126,13 +143,13 @@ jobs:
             trivy-results.json
 
       - name: Upload Trivy SARIF to GitHub Security
-        if: always()
+        if: ${{ steps.check-trivy.outputs.has_results == 'true' }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
 
 # ==================================================
-# 4️⃣ SAST – Semgrep (FIXED SARIF)
+# 4️⃣ SAST – Semgrep (FIXED)
 # ==================================================
   sast:
     runs-on: ubuntu-latest
@@ -144,24 +161,50 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run Semgrep
-        continue-on-error: true
-        uses: semgrep/semgrep-action@v1
+      - name: Setup Python (for Semgrep)
+        uses: actions/setup-python@v5
         with:
-          config: >-
-            p/java
-            p/security-audit
-            p/owasp-top-ten
-          args: --sarif --output=./semgrep-results.sarif
+          python-version: '3.9'
 
-      - name: Verify Semgrep output exists
+      - name: Install Semgrep
+        run: pip install semgrep
+
+      - name: Run Semgrep with SARIF output
+        continue-on-error: true
+        id: semgrep-run
+        run: |
+          semgrep scan \
+            --config p/java \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --sarif \
+            --output ./semgrep-results.sarif \
+            . || echo "Semgrep scan completed with exit code: $?"
+
+      - name: Check if Semgrep SARIF has results
+        id: check-semgrep
         run: |
           if [ -f "./semgrep-results.sarif" ]; then
-            echo "Semgrep SARIF file found"
-            ls -la ./semgrep-results.sarif
+            # Install jq if not present
+            if ! command -v jq &> /dev/null; then
+              sudo apt-get update && sudo apt-get install -y jq
+            fi
+            
+            # Check if file has valid SARIF content with at least one result
+            if jq -e '.runs[0].results | length > 0' ./semgrep-results.sarif > /dev/null 2>&1; then
+              echo "has_results=true" >> $GITHUB_OUTPUT
+              echo "Semgrep SARIF file contains results"
+            else
+              echo "has_results=false" >> $GITHUB_OUTPUT
+              echo "Semgrep SARIF file exists but has no results"
+              # Create a minimal valid SARIF with empty results to avoid upload errors
+              echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"Semgrep","informationUri":"https://semgrep.dev","version":"0.0.0","rules":[]}},"results":[]}]}' > ./semgrep-results.sarif
+            fi
           else
-            echo "Semgrep SARIF file not found, creating empty file"
-            echo '{"runs": []}' > ./semgrep-results.sarif
+            echo "has_results=false" >> $GITHUB_OUTPUT
+            echo "Semgrep SARIF file not found, creating minimal file"
+            # Create a minimal valid SARIF file
+            echo '{"version":"2.1.0","$schema":"https://json.schemastore.org/sarif-2.1.0.json","runs":[{"tool":{"driver":{"name":"Semgrep","informationUri":"https://semgrep.dev","version":"0.0.0","rules":[]}},"results":[]}]}' > ./semgrep-results.sarif
           fi
 
       - name: Upload Semgrep SARIF
@@ -172,7 +215,7 @@ jobs:
           path: ./semgrep-results.sarif
 
       - name: Upload Semgrep SARIF to GitHub Security
-        if: always()
+        if: ${{ steps.check-semgrep.outputs.has_results == 'true' }}
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: ./semgrep-results.sarif

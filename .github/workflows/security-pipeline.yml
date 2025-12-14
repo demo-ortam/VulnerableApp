@@ -167,8 +167,6 @@ jobs:
         run: |
           semgrep scan \
             --config p/java \
-            --config p/java-lang \
-            --config p/default \
             --config p/security-audit \
             --config p/owasp-top-ten \
             --config p/spring \

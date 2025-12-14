@@ -72,9 +72,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: dependency-check-report
-          path: |
-            reports/dependency-check-report.html
-            reports/dependency-check-report.json
+          path: reports/
 
 # ==================================================
 # 3️⃣ Trivy – Image Vulnerability + Secret Scan
@@ -137,7 +135,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run Semgrep (SARIF)
+      - name: Run Semgrep
         continue-on-error: true
         uses: semgrep/semgrep-action@v1
         with:
@@ -145,16 +143,15 @@ jobs:
             p/java
             p/security-audit
             p/owasp-top-ten
-          generateSarif: true
 
-      - name: Upload Semgrep report
+      - name: Upload Semgrep SARIF
         uses: actions/upload-artifact@v4
         with:
           name: semgrep-report
           path: semgrep.sarif
 
 # ==================================================
-# 5️⃣ Secret Scan – TruffleHog
+# 5️⃣ Secret Scan – TruffleHog (FIXED)
 # ==================================================
   secret-scan:
     runs-on: ubuntu-latest
@@ -165,13 +162,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: TruffleHog OSS (JSON)
+      - name: Run TruffleHog CLI (JSON output)
         continue-on-error: true
-        uses: trufflesecurity/trufflehog@v3.92.3
-        with:
-          path: ./
-          json: true
-          output: trufflehog-results.json
+        run: |
+          docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:latest \
+            filesystem /repo --json > trufflehog-results.json
 
       - name: Upload TruffleHog report
         uses: actions/upload-artifact@v4

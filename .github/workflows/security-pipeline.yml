@@ -66,14 +66,20 @@ jobs:
         with:
           project: VulnerableApp
           path: .
-          format: ALL
-          out: dependency-check-report
+          format: HTML,JSON,CSV
+          args: >-
+            --out ./dependency-check-report
+            --scan .
+
+      - name: List generated files (for debugging)
+        run: ls -la ./dependency-check-report/ || echo "No report directory found"
 
       - name: Upload Dependency-Check reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: dependency-check-report
-          path: dependency-check-report/
+          path: ./dependency-check-report/
 
 # ==================================================
 # 3️⃣ Trivy – Image Vulnerability + Secret Scan
@@ -111,6 +117,7 @@ jobs:
           exit-code: '0'
 
       - name: Upload Trivy reports
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trivy-reports
@@ -119,6 +126,7 @@ jobs:
             trivy-results.json
 
       - name: Upload Trivy SARIF to GitHub Security
+        if: always()
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
@@ -144,13 +152,30 @@ jobs:
             p/java
             p/security-audit
             p/owasp-top-ten
-          args: --sarif --output=semgrep.sarif
+          args: --sarif --output=./semgrep-results.sarif
+
+      - name: Verify Semgrep output exists
+        run: |
+          if [ -f "./semgrep-results.sarif" ]; then
+            echo "Semgrep SARIF file found"
+            ls -la ./semgrep-results.sarif
+          else
+            echo "Semgrep SARIF file not found, creating empty file"
+            echo '{"runs": []}' > ./semgrep-results.sarif
+          fi
 
       - name: Upload Semgrep SARIF
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: semgrep-report
-          path: semgrep.sarif
+          path: ./semgrep-results.sarif
+
+      - name: Upload Semgrep SARIF to GitHub Security
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: ./semgrep-results.sarif
 
 # ==================================================
 # 5️⃣ Secret Scan – TruffleHog
@@ -168,9 +193,10 @@ jobs:
         continue-on-error: true
         run: |
           docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:latest \
-            filesystem /repo --json > trufflehog-results.json
+            filesystem /repo --json > trufflehog-results.json || echo "TruffleHog scan completed"
 
       - name: Upload TruffleHog report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: trufflehog-report

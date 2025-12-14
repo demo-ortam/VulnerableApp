@@ -179,8 +179,8 @@ jobs:
       - name: Convert SARIF to JSON using jq
         continue-on-error: true
         run: |
-        # Simply copy SARIF to JSON (SARIF is valid JSON)
-        jq '.' semgrep-results.sarif > semgrep-results.json
+          # Simply copy SARIF to JSON (SARIF is valid JSON)
+          jq '.' semgrep-results.sarif > semgrep-results.json
 
       - name: Upload Semgrep SARIF
         if: always()

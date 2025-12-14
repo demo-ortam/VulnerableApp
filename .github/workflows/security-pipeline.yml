@@ -29,9 +29,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Generate SBOM
-        run: ./gradlew cyclonedxBom
-
       - name: Build application
         run: |
           ./gradlew build | tee build.log
@@ -53,7 +50,7 @@ jobs:
 # ==================================================
 # 2️⃣ Dependency Check – SCA (HTML only)
 # ==================================================
-  dependency-check:
+  sbom-and-dependency-check:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -61,6 +58,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: sbom.sh-create
+        uses: codenotary/sbom.sh-create@v1.1
+        with:
+          # Type of scan (trivyfs, trivyimage, grypefs, grypeimage, syftfs, syftimage)
+          scan_type: trivyvs
+          # Scan target (applicable for image scans)
+          target: '.'
+          
 
       - name: Dependency Check (SCA)
         continue-on-error: true

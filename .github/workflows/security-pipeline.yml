@@ -162,7 +162,7 @@ jobs:
       - name: Install Semgrep
         run: pip install semgrep
 
-      - name: Run Semgrep
+      - name: Run Semgrep SARIF
         continue-on-error: true
         run: |
           semgrep scan \
@@ -176,12 +176,33 @@ jobs:
             --output semgrep-results.sarif \
             .
 
+      - name: Run Semgrep JSON
+        continue-on-error: true
+        run: |
+          semgrep scan \
+            --config p/java \
+            --config p/java-lang \
+            --config p/default \
+            --config p/security-audit \
+            --config p/owasp-top-ten \
+            --config p/spring \
+            --json \
+            --output semgrep-results.json \
+            .
+
       - name: Upload Semgrep SARIF
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: semgrep-report
+          name: semgrep-sarif
           path: semgrep-results.sarif
+
+      - name: Upload Semgrep JSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-json
+          path: semgrep-results.json
 
 # ==================================================
 # 5️⃣ Secret Scan – TruffleHog

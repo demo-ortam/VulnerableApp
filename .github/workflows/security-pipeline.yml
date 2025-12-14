@@ -181,7 +181,7 @@ jobs:
           path: semgrep-results.sarif
 
 # ==================================================
-# 5️⃣ Secret Scan – TruffleHog (Docker + Artifact)
+# 5️⃣ Secret Scan – TruffleHog (Docker + Artifact, fixed)
 # ==================================================
   trufflehog-secret-scan:
     runs-on: ubuntu-latest
@@ -198,15 +198,15 @@ jobs:
         continue-on-error: true
         run: |
           docker run --rm -v "$PWD:/repo" ghcr.io/trufflesecurity/trufflehog:latest \
-            filesystem /repo -j --results=verified,unknown > trufflehog-results.json || true
+            filesystem /repo -j --results=verified,unknown --no-color > trufflehog-results.json 2>&1 || true
 
       - name: Verify TruffleHog output
         run: |
-          if [ -f "trufflehog-results.json" ]; then
+          if [ -s trufflehog-results.json ]; then
             echo "TruffleHog JSON generated successfully."
             ls -lh trufflehog-results.json
           else
-            echo "No TruffleHog JSON output found."
+            echo "TruffleHog JSON is empty."
           fi
 
       - name: Upload TruffleHog report

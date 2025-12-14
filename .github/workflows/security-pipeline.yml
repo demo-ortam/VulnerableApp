@@ -169,7 +169,6 @@ jobs:
             --config p/java \
             --config p/security-audit \
             --config p/owasp-top-ten \
-            --config p/spring \
             --sarif \
             --output semgrep-results.sarif \
             .

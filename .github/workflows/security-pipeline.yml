@@ -198,7 +198,7 @@ jobs:
         continue-on-error: true
         run: |
           docker run --rm -v "$PWD:/repo" trufflesecurity/trufflehog:latest \
-            filesystem /repo -j --results=verified,unknown --no-color > trufflehog-results.json 2>&1 || true
+            filesystem /repo --json > trufflehog-results.json || true
 
       - name: Verify TruffleHog output
         run: |

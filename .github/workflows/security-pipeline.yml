@@ -61,7 +61,7 @@ jobs:
   
       # Trivy Filesystem Scan (Table format for SBOM)
       - name: Trivy Filesystem SCA Scan (Table)
-        uses: aquasecurity/trivy-action@v2
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           scan-type: fs          # filesystem scan
           format: table          # table format for SBOM & vulnerabilities
@@ -78,7 +78,7 @@ jobs:
   
       # Optional: Trivy JSON for automation / SARIF
       - name: Trivy Filesystem SCA Scan (JSON)
-        uses: aquasecurity/trivy-action@v2
+        uses: aquasecurity/trivy-action@0.33.1
         with:
           scan-type: fs
           format: json

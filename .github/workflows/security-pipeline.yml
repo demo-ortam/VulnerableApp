@@ -24,8 +24,54 @@ jobs:
     
     - name: Build with Gradle
       run: ./gradlew build
-    
+
+    - name: Run OWASP Dependency-Check (SCA)
+      continue-on-error: true
+      uses: dependency-check/Dependency-Check_Action@main
+      with:
+        project: 'VulnerableApp'
+        path: '.'
+        format: 'HTML'
+
+    - name: Upload Dependency-Check report
+      uses: actions/upload-artifact@v2
+      with:
+        name: dependency-check-report
+        path: dependency-check-report.html
+
     - name: Build Docker image with Jib
       run: ./gradlew jibDockerBuild --info
       env:
         JIB_JAVA_COMMAND: '["-Dspring.profiles.active=prod"]'
+
+    - name: Scan Docker image with Trivy
+      continue-on-error: true
+      uses: aquasecurity/trivy-action@0.33.1
+      with:
+        image-ref: 'vulnerable-app:latest'
+        format: 'table'
+        severity: 'CRITICAL,HIGH,MEDIUM,LOW'
+        output: 'trivy-results.txt'
+        exit-code: '0'
+
+  # SAST with CodeQL runs in parallel with the build job
+  codeql-analysis:
+    name: CodeQL Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v2
+      with:
+        languages: java
+        queries: security-extended,security-and-quality
+
+    - name: Perform CodeQL Analysis
+      continue-on-error: true
+      uses: github/codeql-action/analyze@v2

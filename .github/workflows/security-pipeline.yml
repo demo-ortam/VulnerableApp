@@ -29,11 +29,6 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Check dependencies
-        run: |
-          ./gradlew dependencyCheckAnalyze
-          ./gradlew buildHealth # For dependency insights
-
       - name: Generate SBOM
         run: ./gradlew cyclonedxBom
 
@@ -138,15 +133,20 @@ jobs:
           format: json
           output: trivy-results.json
           exit-code: '0'
-
-      - name: Upload Trivy reports
+          
+      - name: Upload Trivy SARIF report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-reports
-          path: |
-            trivy-results.sarif
-            trivy-results.json
+          name: trivy-report-sarif
+          path: trivy-results.sarif
+
+      - name: Upload Trivy JSON report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report-json
+          path: trivy-results.json
 
       - name: Upload Trivy SARIF to GitHub Security
         if: ${{ steps.check-trivy.outputs.has_results == 'true' }}

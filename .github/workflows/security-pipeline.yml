@@ -30,7 +30,8 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build application
-        run: ./gradlew build
+        run: |
+          ./gradlew build | tee build.log
 
       - name: Build Docker image with Jib
         run: ./gradlew jibDockerBuild
@@ -39,6 +40,12 @@ jobs:
 
       - name: Verify Docker image
         run: docker images | grep owasp-vulnerableapp
+
+      - name: Upload build logs
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: build.log
 
 # ==================================================
 # 2️⃣ Dependency Check – SCA
@@ -59,13 +66,15 @@ jobs:
         with:
           project: VulnerableApp
           path: .
-          format: HTML
+          format: HTML,JSON
 
-      - name: Upload Dependency-Check report
+      - name: Upload Dependency-Check reports
         uses: actions/upload-artifact@v4
         with:
           name: dependency-check-report
-          path: reports/dependency-check-report.html
+          path: |
+            reports/dependency-check-report.html
+            reports/dependency-check-report.json
 
 # ==================================================
 # 3️⃣ Trivy – Image Vulnerability + Secret Scan
@@ -81,7 +90,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Trivy image scan
+      - name: Trivy image scan (SARIF)
         continue-on-error: true
         uses: aquasecurity/trivy-action@0.33.1
         with:
@@ -92,13 +101,31 @@ jobs:
           output: trivy-results.sarif
           exit-code: '0'
 
+      - name: Trivy image scan (JSON)
+        continue-on-error: true
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: sasanlabs/owasp-vulnerableapp:unreleased
+          scanners: vuln,secret
+          format: json
+          output: trivy-results.json
+          exit-code: '0'
+
+      - name: Upload Trivy reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-reports
+          path: |
+            trivy-results.sarif
+            trivy-results.json
+
       - name: Upload Trivy SARIF to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: trivy-results.sarif
 
 # ==================================================
-# 4️⃣ SAST – Semgrep (Parallel)
+# 4️⃣ SAST – Semgrep
 # ==================================================
   sast:
     runs-on: ubuntu-latest
@@ -110,7 +137,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Run Semgrep
+      - name: Run Semgrep (SARIF)
         continue-on-error: true
         uses: semgrep/semgrep-action@v1
         with:
@@ -118,9 +145,16 @@ jobs:
             p/java
             p/security-audit
             p/owasp-top-ten
+          generateSarif: true
+
+      - name: Upload Semgrep report
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-report
+          path: semgrep.sarif
 
 # ==================================================
-# 5️⃣ Secret Scan – TruffleHog (Parallel)
+# 5️⃣ Secret Scan – TruffleHog
 # ==================================================
   secret-scan:
     runs-on: ubuntu-latest
@@ -131,8 +165,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: TruffleHog OSS
+      - name: TruffleHog OSS (JSON)
         continue-on-error: true
         uses: trufflesecurity/trufflehog@v3.92.3
         with:
           path: ./
+          json: true
+          output: trufflehog-results.json
+
+      - name: Upload TruffleHog report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trufflehog-report
+          path: trufflehog-results.json

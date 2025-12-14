@@ -176,19 +176,11 @@ jobs:
             --output semgrep-results.sarif \
             .
 
-      - name: Run Semgrep JSON
+      - name: Convert SARIF to JSON using jq
         continue-on-error: true
         run: |
-          semgrep scan \
-            --config p/java \
-            --config p/java-lang \
-            --config p/default \
-            --config p/security-audit \
-            --config p/owasp-top-ten \
-            --config p/spring \
-            --json \
-            --output semgrep-results.json \
-            .
+        # Simply copy SARIF to JSON (SARIF is valid JSON)
+        jq '.' semgrep-results.sarif > semgrep-results.json
 
       - name: Upload Semgrep SARIF
         if: always()

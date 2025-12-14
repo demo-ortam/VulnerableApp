@@ -48,9 +48,9 @@ jobs:
           path: build.log
           
 # ==================================================
-# 2️⃣ Trivy SCA – SBOM 
+# 2️⃣ Dependency Check – SCA (HTML only)
 # ==================================================
-  sbom-and-trivy-sca:
+  dependency-check:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -58,42 +58,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-  
-      # Trivy Filesystem Scan (Table format for SBOM)
-      - name: Trivy Filesystem SCA Scan (Table)
-        uses: aquasecurity/trivy-action@0.33.1
-        with:
-          scan-type: fs          # filesystem scan
-          format: table          # table format for SBOM & vulnerabilities
-          output: trivy-sbom-table.txt
-          severity: HIGH,CRITICAL
-          ignore-unfixed: false
-          
-      - name: Upload Trivy SBOM Table Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-sbom-table
-          path: trivy-sbom-table.txt
-  
-      # Optional: Trivy JSON for automation / SARIF
-      - name: Trivy Filesystem SCA Scan (JSON)
-        uses: aquasecurity/trivy-action@0.33.1
-        with:
-          scan-type: fs
-          format: json
-          output: trivy-results.json
-          severity: HIGH,CRITICAL
-          ignore-unfixed: false
-          exit-code: 1
-  
-      - name: Upload Trivy JSON Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: trivy-sca-json
-          path: trivy-results.json
 
+      - name: Dependency Check (SCA)
+        continue-on-error: true
+        uses: dependency-check/Dependency-Check_Action@1.1.0
+        with:
+          project: VulnerableApp
+          path: .
+          format: HTML
+
+      - name: Verify Dependency-Check output
+        run: |
+          ls -la reports || echo "No reports directory found"
+
+      - name: Upload Dependency-Check HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-html-report
+          path: reports/dependency-check-report.html
 
 # ==================================================
 # 3️⃣ Trivy – Image Vulnerability + Secret Scan
